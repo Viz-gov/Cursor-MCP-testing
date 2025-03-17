@@ -1,3 +1,6 @@
+const config = require('./config');
+const { AgentKit } = require('agentkit');
+
 // Google Apps Script code to update spreadsheet
 function onTxSent() {
   // Get the active spreadsheet
@@ -14,6 +17,13 @@ function onTxSent() {
   const amountColIndex = headers.indexOf('Amount'); // Column F
   const doneColIndex = headers.indexOf('Done');
   const dateSentColIndex = headers.indexOf('Date Sent');
+  
+  // Initialize AgentKit
+  const agentkit = new AgentKit({
+    apiKey: config.auth.agentKitApiKey,
+    network: config.network,
+    privateKey: config.auth.privateKey
+  });
   
   // Iterate through rows
   for (let i = 1; i < data.length; i++) {
@@ -35,7 +45,7 @@ function onTxSent() {
       }
     } else {
       // Handle crypto transaction case
-      if (sendCryptoTransaction(recipient, token, amount)) {
+      if (sendCryptoTransaction(agentkit, recipient, token, amount)) {
         updateRowStatus(sheet, i + 1, doneColIndex, dateSentColIndex);
       }
     }
@@ -64,23 +74,38 @@ Research Team`;
 }
 
 // Function to send crypto transaction using AgentKit
-function sendCryptoTransaction(walletAddress, token, amount) {
+async function sendCryptoTransaction(agentkit, walletAddress, token, amount) {
   try {
-    // AgentKit implementation
-    const agentkit = new AgentKit();
+    // Validate the token is USDC
+    if (token.toUpperCase() !== 'USDC') {
+      throw new Error('Only USDC transactions are supported');
+    }
+
+    // Convert amount to proper decimals (USDC has 6 decimals)
+    const amountInDecimals = amount * Math.pow(10, config.tokens.USDC.decimals);
     
     // Configure the transaction
     const tx = {
       to: walletAddress,
-      token: token,
-      amount: amount
+      token: config.tokens.USDC.address,
+      amount: amountInDecimals.toString(),
+      maxGasPrice: config.transaction.maxGasPrice
     };
     
     // Send the transaction
-    const result = agentkit.sendTransaction(tx);
+    const result = await agentkit.sendTransaction(tx);
     
     // Wait for confirmation
-    return agentkit.waitForConfirmation(result.txHash);
+    const confirmed = await agentkit.waitForConfirmation(result.txHash, {
+      confirmations: config.transaction.confirmationBlocks
+    });
+
+    if (!confirmed) {
+      throw new Error('Transaction failed to confirm');
+    }
+
+    Logger.log('Transaction successful: ' + result.txHash);
+    return true;
   } catch (error) {
     Logger.log('Error sending crypto transaction: ' + error.toString());
     return false;
