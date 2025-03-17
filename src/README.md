@@ -1,48 +1,83 @@
-# Google Sheets Automation Script
+# Google Sheets Automation Script with AgentKit Integration
 
-This script automates the process of updating a Google Spreadsheet when a transaction is sent. It specifically updates the "Done" column with "Y" and the "Date Sent" column with today's date when the `tx_sent()` function returns true.
+This script automates the process of sending either crypto transactions or thank you emails based on the recipient type in your Google Spreadsheet. It updates the "Done" column with "Y" and the "Date Sent" column with today's date upon successful completion.
+
+## Spreadsheet Structure
+
+The script expects the following columns:
+- Column D: Recipient (email address or wallet address)
+- Column E: Token (for crypto transactions)
+- Column F: Amount (for crypto transactions)
+- "Done" column: Status indicator
+- "Date Sent" column: Timestamp of completion
+
+## Features
+
+1. **Email Processing**
+   - Detects email addresses in Column D
+   - Sends thank you email with Amazon gift card information
+   - Updates status upon successful sending
+
+2. **Crypto Transactions**
+   - Detects wallet addresses in Column D
+   - Uses AgentKit to send specified token amount
+   - Waits for transaction confirmation
+   - Updates status upon successful transaction
 
 ## Setup Instructions
 
 1. Open your Google Spreadsheet
 2. Click on "Extensions" > "Apps Script"
 3. Copy the contents of `updateGoogleSheet.js` into the Apps Script editor
-4. Replace the placeholder `tx_sent()` function with your actual transaction check logic
+4. Configure the following:
+   - Amazon gift card details in the `sendThankYouEmail` function
+   - AgentKit configuration (API keys, network settings)
 5. Save the script
 6. Click on "Run" > "manualUpdate" to test the script (make sure to authorize when prompted)
 
-## How It Works
+## Configuration
 
-The script:
-1. Identifies the "Done" and "Date Sent" columns in your spreadsheet
-2. Iterates through each row
-3. When `tx_sent()` returns true for a row:
-   - Sets "Done" to "Y"
-   - Sets "Date Sent" to today's date
-
-## Customizing the Script
-
-### Implementing tx_sent()
-Replace the `tx_sent()` function with your actual transaction check logic:
-
+### Email Template
+Modify the email template in `sendThankYouEmail()`:
 ```javascript
-function tx_sent() {
-  // Add your transaction verification logic here
-  // Return true when transaction is confirmed
-  // Return false otherwise
-}
+const body = `Dear Participant,
+Thank you for participating in our research study...`;
 ```
 
-### Automatic Triggers
-You can set up automatic triggers to run the script:
-1. In Apps Script, click on "Triggers" (clock icon)
-2. Click "Add Trigger"
-3. Choose the function to run
-4. Set the trigger type (time-based, on edit, etc.)
+### AgentKit Configuration
+Add your AgentKit configuration in `sendCryptoTransaction()`:
+```javascript
+const agentkit = new AgentKit({
+  // Add your configuration here
+});
+```
+
+## Error Handling
+
+The script includes error handling for both email and crypto transactions:
+- Failed transactions are logged
+- The spreadsheet is only updated on successful completion
+- Each row is processed independently
 
 ## Troubleshooting
 
-1. Make sure you have edit permissions on the spreadsheet
-2. Check that column names match exactly ("Done" and "Date Sent")
-3. Verify that the `tx_sent()` function is properly implemented
-4. Check the Apps Script execution logs for any errors
+1. Check the Apps Script execution logs for detailed error messages
+2. Verify that email addresses and wallet addresses are properly formatted
+3. Ensure AgentKit is properly configured with necessary API keys
+4. Confirm sufficient balance for crypto transactions
+5. Check Gmail quota for email sending
+
+## Security Considerations
+
+1. Store sensitive information (API keys, private keys) securely
+2. Use appropriate permissions for the Google Sheet
+3. Regularly monitor transaction logs
+4. Consider implementing rate limiting for large sheets
+
+## Dependencies
+
+- Google Apps Script
+- Gmail API (for emails)
+- AgentKit (for crypto transactions)
+
+For any questions or issues, please check the execution logs or create an issue in the repository.
