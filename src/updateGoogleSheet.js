@@ -1,6 +1,20 @@
 const config = require('./config');
 const { AgentKit } = require('agentkit');
 
+// Function to create time-based trigger
+function createDailyTrigger() {
+  // Delete any existing triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  
+  // Create a new trigger to run at 2 PM every day
+  ScriptApp.newTrigger('onTxSent')
+    .timeBased()
+    .everyDays(1)
+    .atHour(14)
+    .create();
+}
+
 // Google Apps Script code to update spreadsheet
 function onTxSent() {
   // Get the active spreadsheet
@@ -12,11 +26,11 @@ function onTxSent() {
   
   // Find column indices
   const headers = data[0];
-  const recipientColIndex = headers.indexOf('Recipient'); // Column D
-  const tokenColIndex = headers.indexOf('Token'); // Column E
-  const amountColIndex = headers.indexOf('Amount'); // Column F
-  const doneColIndex = headers.indexOf('Done');
-  const dateSentColIndex = headers.indexOf('Date Sent');
+  const recipientColIndex = 3;  // Column D (0-based)
+  const tokenColIndex = 4;      // Column E (0-based)
+  const amountColIndex = 5;     // Column F (0-based)
+  const doneColIndex = 6;       // Column G (0-based)
+  const dateSentColIndex = 7;   // Column H (0-based)
   
   // Initialize AgentKit
   const agentkit = new AgentKit({
@@ -28,12 +42,21 @@ function onTxSent() {
   // Iterate through rows
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
+    
+    // Check if Done and Date Sent columns are empty
+    if (row[doneColIndex] !== '' || row[dateSentColIndex] !== '') {
+      continue;  // Skip if either column is not empty
+    }
+    
     const recipient = row[recipientColIndex];
     const token = row[tokenColIndex];
     const amount = row[amountColIndex];
     
-    // Skip if already done
-    if (row[doneColIndex] === 'Y') continue;
+    // Skip if any required field is empty
+    if (!recipient || !token || !amount) {
+      Logger.log(`Skipping row ${i + 1}: Missing required information`);
+      continue;
+    }
     
     // Check if recipient is email or wallet address
     const isEmail = recipient.includes('@');
@@ -66,6 +89,7 @@ Best regards,
 Research Team`;
 
     GmailApp.sendEmail(email, subject, body);
+    Logger.log(`Email sent successfully to: ${email}`);
     return true;
   } catch (error) {
     Logger.log('Error sending email: ' + error.toString());
@@ -81,6 +105,11 @@ async function sendCryptoTransaction(agentkit, walletAddress, token, amount) {
       throw new Error('Only USDC transactions are supported');
     }
 
+    // Validate wallet address format
+    if (!walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      throw new Error('Invalid wallet address format');
+    }
+
     // Convert amount to proper decimals (USDC has 6 decimals)
     const amountInDecimals = amount * Math.pow(10, config.tokens.USDC.decimals);
     
@@ -94,6 +123,7 @@ async function sendCryptoTransaction(agentkit, walletAddress, token, amount) {
     
     // Send the transaction
     const result = await agentkit.sendTransaction(tx);
+    Logger.log(`Transaction sent: ${result.txHash}`);
     
     // Wait for confirmation
     const confirmed = await agentkit.waitForConfirmation(result.txHash, {
@@ -104,7 +134,7 @@ async function sendCryptoTransaction(agentkit, walletAddress, token, amount) {
       throw new Error('Transaction failed to confirm');
     }
 
-    Logger.log('Transaction successful: ' + result.txHash);
+    Logger.log(`Transaction confirmed: ${result.txHash}`);
     return true;
   } catch (error) {
     Logger.log('Error sending crypto transaction: ' + error.toString());
@@ -114,11 +144,22 @@ async function sendCryptoTransaction(agentkit, walletAddress, token, amount) {
 
 // Helper function to update row status
 function updateRowStatus(sheet, rowIndex, doneColIndex, dateSentColIndex) {
-  sheet.getRange(rowIndex, doneColIndex + 1).setValue('Y');
-  sheet.getRange(rowIndex, dateSentColIndex + 1).setValue(new Date());
+  try {
+    sheet.getRange(rowIndex, doneColIndex + 1).setValue('Y');
+    sheet.getRange(rowIndex, dateSentColIndex + 1).setValue(new Date());
+    Logger.log(`Updated status for row ${rowIndex}`);
+  } catch (error) {
+    Logger.log(`Error updating row status: ${error.toString()}`);
+  }
 }
 
 // Function to manually trigger the update
 function manualUpdate() {
   onTxSent();
+}
+
+// Function to initialize the script
+function initialize() {
+  createDailyTrigger();
+  Logger.log('Daily trigger created for 2 PM');
 }
